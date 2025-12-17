@@ -46,7 +46,7 @@ export default class Slide {
 
     try {
       const novoSlide = new Slide(container, slides, controls, time);
-      novoSlide.show(0);
+      novoSlide.init();
       return Result.ok(novoSlide);
     } catch (e) {
       return Result.err(e instanceof Error ? e.message : 'Erro ao criar slide');
@@ -61,5 +61,24 @@ export default class Slide {
     this.slides.forEach((el) => this.hide(el));
     this.slide = this.slides[this.index];
     this.slide.classList.add('active');
+  }
+  prev() {
+    this.show(this.index - 1);
+  }
+  next() {
+    this.show(this.index + 1);
+  }
+
+  private addControls() {
+    const prevButton = document.createElement('button');
+    const nextButton = document.createElement('button');
+    this.controls.appendChild(prevButton);
+    this.controls.appendChild(nextButton);
+    prevButton.addEventListener('pointerup', () => this.prev());
+    nextButton.addEventListener('pointerup', () => this.next());
+  }
+  private init() {
+    this.addControls();
+    this.show(this.index);
   }
 }

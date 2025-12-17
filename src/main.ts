@@ -5,16 +5,15 @@ const elements = document.getElementById('slide-elements');
 const controls = document.getElementById('slide-controls');
 
 if (container && elements && controls && elements.children.length) {
-  try {
-    const slide = Slide.create(
-      container,
-      Array.from(elements.children),
-      controls,
-      3000,
-    );
-    if (slide) slide.show(1);
-  } catch (error) {
-    console.error(error);
+  const result = Slide.create(
+    container,
+    Array.from(elements.children),
+    controls,
+    3000,
+  );
+  if (!result.ok) {
+    throw new Error(result.error);
   }
-  console.log('rodou ate aqui');
+  const slide = result.value;
+  slide.show(1);
 }
