@@ -63,10 +63,18 @@ export default class Slide {
     this.slide.classList.add('active');
   }
   prev() {
-    this.show(this.index - 1);
+    if (this.index >= 0) {
+      this.show(this.index - 1);
+    } else {
+      this.show(this.slides.length - 1);
+    }
   }
   next() {
-    this.show(this.index + 1);
+    if (this.index < this.slides.length - 1) {
+      this.show(this.index + 1);
+    } else {
+      this.show(0);
+    }
   }
 
   private addControls() {
