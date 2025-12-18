@@ -15,5 +15,4 @@ if (container && elements && controls && elements.children.length) {
     throw new Error(result.error);
   }
   const slide = result.value;
-  slide.show(1);
 }

@@ -1,4 +1,5 @@
 import { Result } from './result.ts';
+import SafeTimer from './SafeTimer.ts';
 
 export default class Slide {
   container: Element;
@@ -7,6 +8,8 @@ export default class Slide {
   time: number;
   index: number;
   slide: Element;
+  private autoplay = new SafeTimer();
+
   private constructor(
     container: Element,
     slides: Element[],
@@ -57,29 +60,33 @@ export default class Slide {
   }
 
   show(index: number): void {
-    this.index = Math.min(Math.max(index, 0), this.slides.length - 1);
+    const total = this.slides.length;
+    this.index = ((index % total) + total) % total;
     this.slides.forEach((el) => this.hide(el));
     this.slide = this.slides[this.index];
     this.slide.classList.add('active');
+    this.auto(this.time);
   }
+
+  auto(time: number) {
+    this.autoplay.run(() => this.next(), time);
+  }
+
   prev() {
-    if (this.index >= 0) {
-      this.show(this.index - 1);
-    } else {
-      this.show(this.slides.length - 1);
-    }
+    this.autoplay.cancel();
+    this.show(this.index - 1);
   }
+
   next() {
-    if (this.index < this.slides.length - 1) {
-      this.show(this.index + 1);
-    } else {
-      this.show(0);
-    }
+    this.autoplay.cancel;
+    this.show(this.index + 1);
   }
 
   private addControls() {
     const prevButton = document.createElement('button');
     const nextButton = document.createElement('button');
+    prevButton.innerText = 'Anterior';
+    nextButton.innerText = 'Próximo';
     this.controls.appendChild(prevButton);
     this.controls.appendChild(nextButton);
     prevButton.addEventListener('pointerup', () => this.prev());
