@@ -13,6 +13,7 @@ if (container && elements && controls && elements.children.length) {
   );
   if (!result.ok) {
     throw new Error(result.error);
+  } else {
+    const slide = result.value;
   }
-  const slide = result.value;
 }

@@ -1,32 +1,58 @@
 import { Result } from './result.ts';
 import SafeTimer from './SafeTimer.ts';
 
+const INTERNAL = Symbol('SlideInternal');
+
+/**
+ * Slide
+ *
+ * Componente de slideshow no estilo "Stories" (Instagram).
+ *
+ * Regras importantes:
+ * - O construtor da classe é privado.
+ * - - Toda instância de Slide DEVE ser criada através de `Slide.create()`.
+ * - Esta classe NÃO deve ser instanciada diretamente.
+ * - Use sempre `Slide.create()` para garantir validações de DOM e tipos.
+ * - Após a criação, todos os elementos internos são garantidamente `HTMLElement`.
+ *
+ * Funcionalidades:
+ * - Autoplay com timer seguro
+ * - Suporte a vídeos (HTMLVideoElement)
+ * - Pausar ao segurar (press & hold)
+ * - Navegação por toque (Pointer Events)
+ * Nota:
+ * O uso direto de `new Slide()` é considerado comportamento indefinido
+ * e resultará em erro em runtime.
+ *
+ * Compatível com mobile e desktop.
+ */
+
 export default class Slide {
-  container: Element;
-  slides: Element[];
-  controls: Element;
+  container: HTMLElement;
+  slides: HTMLElement[];
+  controls: HTMLElement;
   time: number;
   index: number;
-  slide: Element;
+  slide: HTMLElement;
 
   private autoplay = new SafeTimer();
   private paused = false;
 
   private holdTimer: number | null = null;
   private holding = false;
-  private readonly HOLD_DELAY = 300; //
+  private readonly HOLD_DELAY = 300;
 
   private constructor(
-    container: Element,
-    slides: Element[],
-    controls: Element,
+    internal: symbol,
+    container: HTMLElement,
+    slides: HTMLElement[],
+    controls: HTMLElement,
     time: number = 5000,
   ) {
-    if (!Array.isArray(slides)) {
-      throw new Error('Slides deve ser um array');
-    }
-    if (slides.length === 0) {
-      throw new Error('Use Slide.create');
+    if (internal !== INTERNAL) {
+      throw new Error(
+        'Esta classe não pode ser instanciada diretamente. Use Slide.create()',
+      );
     }
 
     this.container = container;
@@ -44,25 +70,56 @@ export default class Slide {
     controls: Element | null,
     time: number = 5000,
   ): Result<Slide> {
-    if (!slides) {
-      return Result.err('Slides não encontrados');
+    if (!container) return Result.err('Container não encontrado');
+    if (!controls) return Result.err('Controles não encontrados');
+    if (!slides || !Array.isArray(slides)) {
+      return Result.err('Slides inválidos');
     }
-    if (slides.length === 0) {
-      return Result.err('A lista de slides está vazia');
+    const validSlides = slides.filter(
+      (el): el is HTMLElement => el instanceof HTMLElement,
+    );
+    if (validSlides.length === 0) {
+      return Result.err(
+        'Nenhum slide válido encontrado (verifique se são elementos HTML)',
+      );
     }
-    if (!container) return Result.err('Container não encontrado no DOM');
-    if (!controls) return Result.err('Controles não encontrados no DOM');
-
+    if (!(container instanceof HTMLElement))
+      return Result.err('Container precisa ser HTML');
+    if (!(controls instanceof HTMLElement))
+      return Result.err('Controles precisa ser HTML');
     try {
-      const novoSlide = new Slide(container, slides, controls, time);
+      const novoSlide = new Slide(
+        INTERNAL,
+        container,
+        validSlides,
+        controls,
+        time,
+      );
       novoSlide.init();
       return Result.ok(novoSlide);
     } catch (e) {
       return Result.err(e instanceof Error ? e.message : 'Erro ao criar slide');
     }
   }
-  hide(el: Element) {
+
+  private onVideoEnded = (e?: Event) => {
+    this.autoplay.cancel();
+    this.next();
+  };
+
+  hide(el: HTMLElement) {
     el.classList.remove('active');
+
+    if (el instanceof HTMLVideoElement) {
+      el.muted = true;
+      el.removeEventListener('ended', this.onVideoEnded);
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch {
+        // Ignora erros se o vídeo ainda não carregou
+      }
+    }
   }
 
   show(index: number): void {
@@ -70,11 +127,39 @@ export default class Slide {
     this.index = ((index % total) + total) % total;
 
     this.slides.forEach((el) => this.hide(el));
+
     this.slide = this.slides[this.index];
     this.slide.classList.add('active');
 
-    if (!this.paused) {
+    if (this.paused) return;
+
+    if (this.slide instanceof HTMLVideoElement) {
+      this.autoVideo(this.slide);
+    } else {
       this.auto(this.time);
+    }
+  }
+
+  autoVideo(video: HTMLVideoElement) {
+    this.autoplay.cancel();
+
+    video.muted = true;
+    video.removeEventListener('ended', this.onVideoEnded);
+    video.addEventListener('ended', this.onVideoEnded);
+
+    const maxDuration =
+      isFinite(video.duration) && video.duration > 0
+        ? video.duration * 1000
+        : this.time;
+
+    this.autoplay.run(() => this.next(), maxDuration + 500);
+
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        this.autoplay.cancel();
+        this.auto(this.time);
+      });
     }
   }
 
@@ -83,13 +168,13 @@ export default class Slide {
   }
 
   prev() {
-    if (this.paused) return;
+    if (this.paused && !this.holding) return;
     this.autoplay.cancel();
     this.show(this.index - 1);
   }
 
   next() {
-    if (this.paused) return;
+    if (this.paused && !this.holding) return;
     this.autoplay.cancel();
     this.show(this.index + 1);
   }
@@ -98,16 +183,25 @@ export default class Slide {
     if (this.paused) return;
     this.paused = true;
     this.autoplay.pause();
+    if (this.slide instanceof HTMLVideoElement) {
+      this.slide.pause();
+    }
+    this.container.classList.add('paused');
   }
 
   private resume() {
     if (!this.paused) return;
     this.paused = false;
     this.autoplay.resume();
+
+    if (this.slide instanceof HTMLVideoElement) {
+      this.slide.play().catch(() => {});
+    }
+    this.container.classList.remove('paused');
   }
 
   private onPointerDown() {
-    if (this.holdTimer) return;
+    if (this.holdTimer) clearTimeout(this.holdTimer);
 
     this.holdTimer = window.setTimeout(() => {
       this.holding = true;
@@ -120,7 +214,6 @@ export default class Slide {
       clearTimeout(this.holdTimer);
       this.holdTimer = null;
     }
-
     if (this.holding) {
       this.holding = false;
       this.resume();
@@ -131,25 +224,47 @@ export default class Slide {
     const prevButton = document.createElement('button');
     const nextButton = document.createElement('button');
 
-    prevButton.innerText = 'Anterior';
-    nextButton.innerText = 'Próximo';
+    prevButton.classList.add('slide-nav', 'slide-prev');
+    nextButton.classList.add('slide-nav', 'slide-next');
+
+    prevButton.innerText = '';
+    nextButton.innerText = '';
+    prevButton.type = 'button';
+    prevButton.setAttribute('aria-label', 'Slide Anterior');
+    nextButton.setAttribute('aria-label', 'Próximo Slide');
 
     this.controls.appendChild(prevButton);
     this.controls.appendChild(nextButton);
 
-    this.container.addEventListener('pointerdown', () => this.onPointerDown());
-    this.container.addEventListener('pointerup', () => this.onPointerUp());
-    this.container.addEventListener('pointerleave', () => this.onPointerUp());
-    this.container.addEventListener('pointercancel', () => this.onPointerUp());
+    const handleStart = (e: PointerEvent) => {
+      const btn = e.target as HTMLElement;
+      try {
+        btn.setPointerCapture(e.pointerId);
+      } catch {}
+      this.onPointerDown();
+    };
 
-    prevButton.addEventListener('pointerup', () => {
-      if (this.holding) return;
-      this.prev();
-    });
-    nextButton.addEventListener('pointerup', () => {
-      if (this.holding) return;
-      this.next();
-    });
+    const handleEnd = (e: PointerEvent, action: 'prev' | 'next') => {
+      const btn = e.target as HTMLElement;
+      try {
+        if (btn.hasPointerCapture(e.pointerId)) {
+          btn.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+
+      if (!this.holding) {
+        if (action === 'prev') this.prev();
+        if (action === 'next') this.next();
+      }
+      this.onPointerUp();
+    };
+
+    prevButton.addEventListener('pointerdown', (e) => handleStart(e));
+    nextButton.addEventListener('pointerdown', (e) => handleStart(e));
+    prevButton.addEventListener('pointerup', (e) => handleEnd(e, 'prev'));
+    nextButton.addEventListener('pointerup', (e) => handleEnd(e, 'next'));
+    prevButton.addEventListener('pointercancel', () => this.onPointerUp());
+    nextButton.addEventListener('pointercancel', () => this.onPointerUp());
   }
   private init() {
     this.addControls();
