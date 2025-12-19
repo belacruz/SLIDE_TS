@@ -8,7 +8,13 @@ export default class Slide {
   time: number;
   index: number;
   slide: Element;
+
   private autoplay = new SafeTimer();
+  private paused = false;
+
+  private holdTimer: number | null = null;
+  private holding = false;
+  private readonly HOLD_DELAY = 300; //
 
   private constructor(
     container: Element,
@@ -62,10 +68,14 @@ export default class Slide {
   show(index: number): void {
     const total = this.slides.length;
     this.index = ((index % total) + total) % total;
+
     this.slides.forEach((el) => this.hide(el));
     this.slide = this.slides[this.index];
     this.slide.classList.add('active');
-    this.auto(this.time);
+
+    if (!this.paused) {
+      this.auto(this.time);
+    }
   }
 
   auto(time: number) {
@@ -73,24 +83,73 @@ export default class Slide {
   }
 
   prev() {
+    if (this.paused) return;
     this.autoplay.cancel();
     this.show(this.index - 1);
   }
 
   next() {
-    this.autoplay.cancel;
+    if (this.paused) return;
+    this.autoplay.cancel();
     this.show(this.index + 1);
+  }
+
+  private pause() {
+    if (this.paused) return;
+    this.paused = true;
+    this.autoplay.pause();
+  }
+
+  private resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    this.autoplay.resume();
+  }
+
+  private onPointerDown() {
+    if (this.holdTimer) return;
+
+    this.holdTimer = window.setTimeout(() => {
+      this.holding = true;
+      this.pause();
+    }, this.HOLD_DELAY);
+  }
+
+  private onPointerUp() {
+    if (this.holdTimer) {
+      clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+
+    if (this.holding) {
+      this.holding = false;
+      this.resume();
+    }
   }
 
   private addControls() {
     const prevButton = document.createElement('button');
     const nextButton = document.createElement('button');
+
     prevButton.innerText = 'Anterior';
     nextButton.innerText = 'Próximo';
+
     this.controls.appendChild(prevButton);
     this.controls.appendChild(nextButton);
-    prevButton.addEventListener('pointerup', () => this.prev());
-    nextButton.addEventListener('pointerup', () => this.next());
+
+    this.container.addEventListener('pointerdown', () => this.onPointerDown());
+    this.container.addEventListener('pointerup', () => this.onPointerUp());
+    this.container.addEventListener('pointerleave', () => this.onPointerUp());
+    this.container.addEventListener('pointercancel', () => this.onPointerUp());
+
+    prevButton.addEventListener('pointerup', () => {
+      if (this.holding) return;
+      this.prev();
+    });
+    nextButton.addEventListener('pointerup', () => {
+      if (this.holding) return;
+      this.next();
+    });
   }
   private init() {
     this.addControls();
