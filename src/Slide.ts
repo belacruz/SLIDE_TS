@@ -201,6 +201,7 @@ export default class Slide {
   }
 
   private pause() {
+    document.body.classList.add('paused');
     if (this.paused) return;
     this.paused = true;
     this.autoplay.pause();
@@ -214,6 +215,7 @@ export default class Slide {
   }
 
   private resume() {
+    document.body.classList.remove('paused');
     if (!this.paused) return;
     this.paused = false;
     this.autoplay.resume();
