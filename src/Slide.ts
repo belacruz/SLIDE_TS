@@ -41,6 +41,8 @@ export default class Slide {
   private holdTimer: number | null = null;
   private holding = false;
   private readonly HOLD_DELAY = 300;
+  thumbItems: HTMLElement[] | null;
+  thumb: HTMLElement | null;
 
   private constructor(
     internal: symbol,
@@ -62,6 +64,9 @@ export default class Slide {
 
     this.index = 0;
     this.slide = this.slides[this.index];
+
+    this.thumbItems = null;
+    this.thumb = null;
   }
 
   static create(
@@ -125,14 +130,16 @@ export default class Slide {
   show(index: number): void {
     const total = this.slides.length;
     this.index = ((index % total) + total) % total;
-
     this.slides.forEach((el) => this.hide(el));
-
     this.slide = this.slides[this.index];
+    if (this.thumbItems) {
+      this.thumb = this.thumbItems[this.index];
+      this.thumbItems.forEach((el) => el.classList.remove('active'));
+      this.thumb.classList.add('active');
+    }
     this.slide.classList.add('active');
 
     if (this.paused) return;
-
     if (this.slide instanceof HTMLVideoElement) {
       this.autoVideo(this.slide);
     } else {
@@ -143,9 +150,22 @@ export default class Slide {
   autoVideo(video: HTMLVideoElement) {
     this.autoplay.cancel();
 
+    const setVideoDuration = () => {
+      const duration = video.duration * 1000;
+      this.auto(duration);
+    };
+
     video.muted = true;
     video.removeEventListener('ended', this.onVideoEnded);
     video.addEventListener('ended', this.onVideoEnded);
+
+    if (video.readyState >= 1) {
+      setVideoDuration();
+    } else {
+      video.addEventListener('loadedmetadata', setVideoDuration, {
+        once: true,
+      });
+    }
 
     const maxDuration =
       isFinite(video.duration) && video.duration > 0
@@ -165,6 +185,7 @@ export default class Slide {
 
   auto(time: number) {
     this.autoplay.run(() => this.next(), time);
+    if (this.thumb) this.thumb.style.animationDuration = `${time}ms`;
   }
 
   prev() {
@@ -183,6 +204,9 @@ export default class Slide {
     if (this.paused) return;
     this.paused = true;
     this.autoplay.pause();
+
+    this.thumb?.classList.add('paused');
+
     if (this.slide instanceof HTMLVideoElement) {
       this.slide.pause();
     }
@@ -193,6 +217,8 @@ export default class Slide {
     if (!this.paused) return;
     this.paused = false;
     this.autoplay.resume();
+
+    this.thumb?.classList.remove('paused');
 
     if (this.slide instanceof HTMLVideoElement) {
       this.slide.play().catch(() => {});
@@ -266,8 +292,19 @@ export default class Slide {
     prevButton.addEventListener('pointercancel', () => this.onPointerUp());
     nextButton.addEventListener('pointercancel', () => this.onPointerUp());
   }
+  private addThumbItems() {
+    const thumbContainer = document.createElement('div');
+    thumbContainer.id = 'slide-thumb';
+    for (let i = 0; i < this.slides.length; i++) {
+      thumbContainer.innerHTML += `<span><span class="thumb-item"></span></span>`;
+    }
+    this.controls.appendChild(thumbContainer);
+    this.thumbItems = Array.from(document.querySelectorAll('.thumb-item'));
+  }
+
   private init() {
     this.addControls();
+    this.addThumbItems();
     this.show(this.index);
   }
 }
