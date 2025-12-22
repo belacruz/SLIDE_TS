@@ -1,15 +1,4 @@
-Perfeito. Abaixo está o **README.md totalmente corrigido**, pronto para **copiar e colar**, mantendo **tom profissional**, **sem buzz**, com:
-
-* Índice funcionando corretamente (âncoras Markdown)
-* Blocos de código restaurados e bem formatados
-* Ajustes de clareza sem mudar sua intenção arquitetural
-* Pequenas melhorias de precisão técnica
-* Seção explícita de *não-objetivos*
-* Linguagem consistente e objetiva
-
----
-
-# Slide Stories
+## SLIDE_TS
 
 Componente de slideshow no estilo **stories**, implementado em **TypeScript** como módulo **ES**. Projetado com **design orientado por dados**, criação controlada via **factory (`create`)**, validações explícitas e **enforcement de instanciação por `Symbol`**.
 A API de criação retorna um **`Result<T>`**, permitindo tratamento claro de sucesso e erro sem uso de exceções.
